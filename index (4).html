@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truck Inbound Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#ffffff; --bg2:#f5f5f3; --bg3:#efefec;
+    --text:#1a1a18; --text2:#6b6b67; --text3:#9b9b97;
+    --border:rgba(0,0,0,0.12); --border2:rgba(0,0,0,0.22);
+    --blue-bg:#e6f1fb; --blue-text:#185FA5; --blue-border:#b5d4f4;
+    --green-bg:#e1f5ee; --green-text:#0F6E56; --green-border:#9FE1CB;
+    --amber-bg:#FAEEDA; --amber-text:#854F0B; --amber-border:#FAC775;
+    --red-bg:#FCEBEB; --red-text:#A32D2D; --red-border:#F7C1C1;
+    --gray-bg:#F1EFE8; --gray-text:#5F5E5A; --gray-border:#D3D1C7;
+    --purple-bg:#EEEDFE; --purple-text:#534AB7; --purple-border:#AFA9EC;
+    --radius:8px; --radius-lg:12px; --shadow:0 1px 4px rgba(0,0,0,0.07);
+  }
+  @media (prefers-color-scheme:dark) {
+    :root {
+      --bg:#1c1c1a; --bg2:#252523; --bg3:#2e2e2c;
+      --text:#f0ede8; --text2:#a0a09a; --text3:#686864;
+      --border:rgba(255,255,255,0.1); --border2:rgba(255,255,255,0.18);
+      --blue-bg:#0c447c; --blue-text:#85B7EB; --blue-border:#185FA5;
+      --green-bg:#085041; --green-text:#5DCAA5; --green-border:#0F6E56;
+      --amber-bg:#633806; --amber-text:#EF9F27; --amber-border:#BA7517;
+      --red-bg:#791F1F; --red-text:#F09595; --red-border:#A32D2D;
+      --gray-bg:#444441; --gray-text:#B4B2A9; --gray-border:#5F5E5A;
+      --purple-bg:#3C3489; --purple-text:#AFA9EC; --purple-border:#534AB7;
+    }
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg3); color:var(--text); font-size:14px; min-height:100vh; }
+  .shell { max-width:1280px; margin:0 auto; padding:1.25rem 1rem; }
+  .role-banner { padding:7px 1.25rem; font-size:12px; font-weight:600; display:flex; align-items:center; gap:8px; border-radius:var(--radius) var(--radius) 0 0; letter-spacing:.02em; }
+  .role-banner.all,.role-banner.warehouse { background:var(--gray-bg); color:var(--gray-text); }
+  .role-banner.dock       { background:var(--green-bg);  color:var(--green-text); }
+  .role-banner.gate       { background:var(--blue-bg);   color:var(--blue-text); }
+  .role-banner.shipper    { background:var(--purple-bg); color:var(--purple-text); }
+  .role-banner.dispatcher { background:var(--amber-bg);  color:var(--amber-text); }
+  .top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-wrap:wrap; gap:12px; background:var(--bg); border-radius:0 0 var(--radius-lg) var(--radius-lg); padding:1rem 1.25rem; border:0.5px solid var(--border); box-shadow:var(--shadow); }
+  .top-bar h1 { font-size:17px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .sync-pill { font-size:11px; padding:3px 10px; border-radius:99px; display:flex; align-items:center; gap:5px; font-weight:500; cursor:default; }
+  .sync-pill.ok    { background:var(--green-bg); color:var(--green-text); }
+  .sync-pill.err   { background:var(--red-bg);   color:var(--red-text); }
+  .sync-pill.busy  { background:var(--amber-bg); color:var(--amber-text); }
+  .sync-pill.off   { background:var(--gray-bg);  color:var(--gray-text); }
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; margin-bottom:1.25rem; }
+  .metric-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius); padding:12px 1rem; box-shadow:var(--shadow); }
+  .mlabel { font-size:11px; color:var(--text2); margin-bottom:4px; text-transform:uppercase; letter-spacing:.04em; }
+  .mvalue { font-size:24px; font-weight:700; }
+  .mvalue.pending{color:var(--amber-text);} .mvalue.checked{color:var(--blue-text);} .mvalue.dock{color:var(--green-text);} .mvalue.backlog{color:var(--red-text);}
+  .toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:10px; }
+  .tl,.tr { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .chip { font-size:12px; padding:5px 14px; border-radius:99px; cursor:pointer; border:0.5px solid var(--border2); color:var(--text2); background:transparent; font-family:inherit; transition:all .12s; }
+  .chip.active { background:var(--bg2); color:var(--text); font-weight:600; }
+  .btn { font-size:12px; padding:6px 12px; cursor:pointer; border-radius:var(--radius); display:inline-flex; align-items:center; gap:5px; font-family:inherit; font-weight:500; transition:opacity .1s; white-space:nowrap; }
+  .btn:hover{opacity:.82;} .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn.primary  {background:var(--blue-bg);  color:var(--blue-text);  border:0.5px solid var(--blue-border);}
+  .btn.success  {background:var(--green-bg); color:var(--green-text); border:0.5px solid var(--green-border);}
+  .btn.danger   {background:var(--red-bg);   color:var(--red-text);   border:0.5px solid var(--red-border);}
+  .btn.ghost    {background:transparent;      color:var(--text2);      border:0.5px solid var(--border2);}
+  .btn.amber    {background:var(--amber-bg); color:var(--amber-text); border:0.5px solid var(--amber-border);}
+  .card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow); overflow:hidden; margin-bottom:1.25rem; }
+  .card-head { padding:10px 1.25rem; border-bottom:0.5px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:var(--bg2); }
+  .card-head h2 { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text2); }
+  .tw { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { text-align:left; padding:9px 12px; font-size:11px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.04em; border-bottom:0.5px solid var(--border); white-space:nowrap; }
+  tbody tr { border-bottom:0.5px solid var(--border); transition:background .1s; }
+  tbody tr:last-child{border-bottom:none;} tbody tr:hover{background:var(--bg2);}
+  tbody tr.blrow { background:color-mix(in srgb,var(--red-bg) 22%,transparent); }
+  td { padding:10px 12px; vertical-align:middle; }
+  .idc{font-weight:700;} .muted{color:var(--text2);} .sm{font-size:12px;}
+  .badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;display:inline-block;white-space:nowrap;}
+  .badge-pending{background:var(--amber-bg);color:var(--amber-text);}
+  .badge-checked{background:var(--blue-bg);color:var(--blue-text);}
+  .badge-dock{background:var(--green-bg);color:var(--green-text);}
+  .badge-departed{background:var(--gray-bg);color:var(--gray-text);}
+  .badge-backlog{background:var(--red-bg);color:var(--red-text);}
+  .ra{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
+  .pthu{width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:0.5px solid var(--border);vertical-align:middle;}
+  .pbox{width:36px;height:36px;border-radius:6px;background:var(--bg2);border:0.5px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;}
+  .pbox.v{cursor:default;}
+  .nc{font-size:12px;color:var(--text2);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;}
+  .blink{font-size:11px;color:var(--blue-text);cursor:pointer;text-decoration:underline;display:block;margin-top:2px;}
+  .ttag{font-size:11px;padding:3px 8px;border-radius:99px;font-weight:600;display:inline-block;}
+  .ttag.eta{background:var(--amber-bg);color:var(--amber-text);}
+  .ttag.ata{background:var(--green-bg);color:var(--green-text);}
+  .empty-c{text-align:center;padding:2.5rem 1rem;color:var(--text2);}
+  .sec-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin:1.5rem 0 .6rem;display:flex;align-items:center;gap:6px;}
+  /* Loading overlay */
+  .loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:400;}
+  .loading-box{background:var(--bg);border-radius:var(--radius-lg);padding:2rem 2.5rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2);}
+  .spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--blue-text);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 12px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  /* Setup panel */
+  .setup-panel{background:var(--bg);border:0.5px solid var(--amber-border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow);}
+  .setup-panel h2{font-size:13px;font-weight:700;color:var(--amber-text);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .setup-steps{counter-reset:step;display:grid;gap:10px;margin-bottom:12px;}
+  .setup-step{display:flex;gap:10px;align-items:flex-start;}
+  .step-num{background:var(--amber-bg);color:var(--amber-text);font-weight:700;font-size:12px;border-radius:99px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .step-body{font-size:13px;line-height:1.6;}
+  .step-body b{font-weight:700;}
+  .code-block{font-family:monospace;font-size:11.5px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-top:6px;white-space:pre;overflow-x:auto;line-height:1.7;}
+  /* Links panel */
+  .lp{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1.25rem;box-shadow:var(--shadow);}
+  .lp h2{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);margin-bottom:12px;}
+  .lrows{display:grid;gap:8px;}
+  .lrow{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--bg2);}
+  .rlabel{font-weight:700;font-size:13px;min-width:170px;}
+  .rdesc{font-size:12px;color:var(--text2);flex:1;}
+  .lurl{font-size:11px;color:var(--blue-text);word-break:break-all;flex-basis:100%;margin-top:4px;font-family:monospace;background:var(--bg);padding:4px 8px;border-radius:4px;border:0.5px solid var(--border);}
+  .info-box{background:var(--blue-bg);color:var(--blue-text);border:0.5px solid var(--blue-border);border-radius:var(--radius);padding:10px 14px;font-size:12px;margin-bottom:1rem;line-height:1.5;}
+  /* Modal */
+  .mb{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;}
+  .mo{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.5rem;width:440px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);}
+  .mo h3{font-size:16px;font-weight:700;margin-bottom:1rem;}
+  .fg{margin-bottom:12px;}
+  .fg label{font-size:11px;color:var(--text2);display:block;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+  .fg input,.fg select,.fg textarea{width:100%;background:var(--bg);color:var(--text);border:0.5px solid var(--border2);border-radius:var(--radius);padding:7px 10px;font-size:13px;font-family:inherit;outline:none;}
+  .fg input:focus,.fg select:focus{border-color:var(--blue-text);}
+  .fr{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .ma{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;}
+  .pdrop{border:1.5px dashed var(--border2);border-radius:var(--radius);padding:1.25rem;text-align:center;cursor:pointer;color:var(--text2);font-size:13px;position:relative;transition:background .15s;}
+  .pdrop:hover{background:var(--bg2);}
+  .pdrop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .pdrop-icon{font-size:22px;display:block;margin-bottom:6px;}
+  .pprev{width:100%;height:110px;object-fit:cover;border-radius:var(--radius);margin-top:8px;display:block;}
+  /* Lightbox */
+  .lbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:300;cursor:zoom-out;}
+  .lbox img{max-width:90vw;max-height:88vh;border-radius:var(--radius-lg);object-fit:contain;}
+  .lbox-x{position:absolute;top:1rem;right:1.25rem;color:#fff;font-size:28px;cursor:pointer;background:none;border:none;line-height:1;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="mc"></div>
+<div id="lb"></div>
+
+<script>
+// ── Role config ───────────────────────────────────────────────────────────────
+const ROLE_CONFIG = {
+  all:       {label:'Admin',           icon:'🔧', canAdd:true,  canAdvance:true,  canPhoto:true,  canBOL:true,  canNote:true,  canExport:true,  canLinks:true,  canRemove:true,  gateOnly:false, shipperOnly:false},
+  dock:      {label:'Dock Supervisor', icon:'🏭', canAdd:true,  canAdvance:true,  canPhoto:true,  canBOL:true,  canNote:true,  canExport:true,  canLinks:false, canRemove:true,  gateOnly:false, shipperOnly:false},
+  gate:      {label:'Gate / Security', icon:'🛡️', canAdd:true,  canAdvance:false, canPhoto:false, canBOL:false, canNote:false, canExport:true,  canLinks:false, canRemove:false, gateOnly:true,  shipperOnly:false},
+  shipper:   {label:'Shipper',         icon:'📦', canAdd:true,  canAdvance:false, canPhoto:false, canBOL:true,  canNote:true,  canExport:false, canLinks:false, canRemove:false, gateOnly:false, shipperOnly:true},
+  dispatcher:{label:'Dispatcher',      icon:'📋', canAdd:true,  canAdvance:true,  canPhoto:false, canBOL:false, canNote:true,  canExport:true,  canLinks:false, canRemove:false, gateOnly:false, shipperOnly:false},
+  warehouse: {label:'Warehouse',       icon:'📦', canAdd:false, canAdvance:false, canPhoto:false, canBOL:false, canNote:true,  canExport:false, canLinks:false, canRemove:false, gateOnly:false, shipperOnly:false},
+};
+const ROLE_DESC = {
+  all:'Full access — all actions',
+  dock:'Full edit, all statuses, photo & BOL upload, export',
+  gate:'Add trucks (pending), mark Arrived/Checked in with ATA, export',
+  shipper:'Add trucks with ETA, attach BOL, update notes on own trucks',
+  dispatcher:'Add trucks, advance statuses, notes, export',
+  warehouse:'View all trucks, add notes only',
+};
+const STATUSES = {
+  pending: {label:'Pending arrival',                badge:'badge-pending', next:'checked', nextLabel:'Mark arrived / check in'},
+  checked: {label:'Arrived / Checked in',           badge:'badge-checked', next:'dock',    nextLabel:'Arrived to dock'},
+  dock:    {label:'Arrived to dock',                badge:'badge-dock',    next:'departed',nextLabel:'Mark departed from dock'},
+  departed:{label:'Departed from Dock / Completed', badge:'badge-departed',next:null,      nextLabel:null},
+};
+
+function getRoleFromURL(){const r=new URLSearchParams(window.location.search).get('role');return ROLE_CONFIG[r]?r:'all';}
+let CR=getRoleFromURL(), RC=ROLE_CONFIG[CR];
+
+// ── Sheet URL — stored in localStorage, set once by admin ────────────────────
+let SHEET_URL = localStorage.getItem('tit_sheeturl')||'';
+
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());}
+function pad2(n){return String(n).padStart(2,'0');}
+function pad(n){return String(n).padStart(2,'0');}
+function readFile(file,cb){const r=new FileReader();r.onload=e=>cb(e.target.result);r.readAsDataURL(file);}
+function isBacklog(t){return t.status!=='departed'&&t.date<todayStr();}
+function hasArrived(t){return['checked','dock','departed'].includes(t.status);}
+
+// ── In-memory trucks (loaded from Sheet) ─────────────────────────────────────
+let trucks=[];
+let nextUid=1;
+let currentFilter='active', pendingPhoto=null, pendingBOL=null;
+let pollInterval=null;
+
+// ── Sync pill ─────────────────────────────────────────────────────────────────
+function setSyncPill(state,msg){
+  const p=document.getElementById('syncPill');
+  if(!p)return;
+  p.className='sync-pill '+state;
+  const icons={ok:'✅',err:'❌',busy:'⏳',off:'⚪'};
+  p.innerHTML=icons[state]+' '+msg;
+}
+
+// ── JSONP helper — bypasses CORS entirely for GET requests ───────────────────
+function jsonpFetch(url){
+  return new Promise((resolve,reject)=>{
+    const cbName='_cb'+Date.now()+'_'+Math.floor(Math.random()*9999);
+    const script=document.createElement('script');
+    const timer=setTimeout(()=>{
+      cleanup(); reject(new Error('timeout'));
+    },12000);
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName]=function(data){cleanup();resolve(data);};
+    script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
+    script.onerror=()=>{cleanup();reject(new Error('script error'));};
+    document.head.appendChild(script);
+  });
+}
+
+// ── Load all trucks from Sheet (JSONP — works cross-origin) ───────────────────
+async function loadFromSheet(){
+  if(!SHEET_URL){setSyncPill('off','Sheet not connected');return;}
+  setSyncPill('busy','Loading…');
+  try{
+    const data=await jsonpFetch(SHEET_URL+'?action=getAll');
+    if(data&&data.trucks){
+      trucks=data.trucks;
+      nextUid=trucks.length>0?Math.max(...trucks.map(t=>Number(t.uid)||0))+1:1;
+      setSyncPill('ok','Live · '+new Date().toLocaleTimeString());
+      render();
+    }else{
+      setSyncPill('err','No data returned — check setup');
+    }
+  }catch(e){
+    setSyncPill('err','Connection error');
+  }
+}
+
+// ── Write a single truck to Sheet (fire-and-forget JSONP) ────────────────────
+async function saveTruckToSheet(truck){
+  if(!SHEET_URL) return;
+  setSyncPill('busy','Saving…');
+  try{
+    const payload=encodeURIComponent(JSON.stringify({action:'upsert',truck:{
+      uid:truck.uid, id:truck.id, carrier:truck.carrier, driver:truck.driver,
+      eta:truck.eta||'', ata:truck.ata||'', departedAt:truck.departedAt||'',
+      date:truck.date, status:STATUSES[truck.status]?.label||truck.status,
+      statusKey:truck.status, note:truck.note||'', shipperName:truck.shipperName||'',
+      destination:truck.destination||''
+    }}));
+    await jsonpFetch(SHEET_URL+'?data='+payload);
+    setSyncPill('ok','Saved · '+new Date().toLocaleTimeString());
+  }catch(e){setSyncPill('err','Save failed — retrying…');setTimeout(()=>saveTruckToSheet(truck),3000);}
+}
+
+// ── Delete a truck from Sheet ─────────────────────────────────────────────────
+async function deleteTruckFromSheet(uid){
+  if(!SHEET_URL) return;
+  try{
+    const payload=encodeURIComponent(JSON.stringify({action:'softdelete',uid}));
+    await jsonpFetch(SHEET_URL+'?data='+payload);
+  }catch(e){}
+}
+
+// ── Auto-poll every 12 seconds to pick up other users changes ─────────────────
+function startPolling(){
+  if(pollInterval) clearInterval(pollInterval);
+  pollInterval=setInterval(()=>{if(SHEET_URL) loadFromSheet();},12000);
+}
+
+// ── Shell ─────────────────────────────────────────────────────────────────────
+function buildShell(){
+  document.getElementById('app').innerHTML=`
+  <div class="shell">
+    <div class="role-banner ${CR}">${RC.icon} ${RC.label} &nbsp;·&nbsp; ${ROLE_DESC[CR]}</div>
+    <div class="top-bar">
+      <h1>🚛 Truck Inbound Tracker</h1>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="sync-pill off" id="syncPill">⚪ Sheet not connected</span>
+        <button class="btn ghost" onclick="loadFromSheet()" title="Refresh data">🔄 Refresh</button>
+        ${RC.canLinks?`<button class="btn ghost" onclick="toggleSetup()">⚙️ Sheet setup</button><button class="btn ghost" onclick="toggleLinks()">🔗 Role links</button>`:''}
+        ${RC.canExport?`<button class="btn success" onclick="exportCSV('all')">⬇ Export all</button>`:''}
+      </div>
+    </div>
+    ${RC.canLinks?`<div id="setupPanel" style="display:none"></div><div id="lpanel" style="display:none"></div>`:''}
+    <div id="noSheetBanner"></div>
+    <div class="metrics" id="mb"></div>
+    <div class="toolbar">
+      <div class="tl">
+        <button class="chip active" onclick="setFilter('active',this)">Active trucks</button>
+        <button class="chip" onclick="setFilter('backlog',this)">Backlog</button>
+      </div>
+      <div class="tr">
+        ${RC.canAdd?`<button class="btn primary" onclick="openAddModal()">+ Add truck</button>`:''}
+      </div>
+    </div>
+    <div class="card">
+      <div class="tw"><table>
+        <thead><tr><th>Photo</th><th>Truck ID</th><th>Carrier</th><th>Driver</th><th>ETA / ATA</th><th>Destination</th><th>Date</th><th>Status</th><th>Note / BOL</th><th>Actions</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table></div>
+    </div>
+    <div class="sec-label">✅ Departed / Completed</div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Completed trucks</h2>
+        ${RC.canExport?`<button class="btn success" onclick="exportCSV('departed')">⬇ Export completed</button>`:''}
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Truck ID</th><th>Carrier</th><th>Driver</th><th>ETA</th><th>ATA</th><th>Departed date/time</th><th>Destination</th><th>Date</th><th>Note</th></tr></thead>
+        <tbody id="cb"></tbody>
+      </table></div>
+    </div>
+  </div>`;
+
+  if(!SHEET_URL){
+    const b=document.getElementById('noSheetBanner');
+    if(b) b.innerHTML=`<div class="info-box" style="margin-bottom:1rem;">
+      ${RC.canLinks
+        ? `⚠️ <b>Sheet not connected.</b> Click <b>⚙️ Sheet setup</b> above to connect your Google Sheet so all users share live data.`
+        : `⚠️ This app is not yet connected to a live database. Please ask your admin to complete the Sheet setup.`
+      }
+    </div>`;
+  }
+}
+
+// ── Setup panel ───────────────────────────────────────────────────────────────
+let setupVisible=false;
+function toggleSetup(){
+  setupVisible=!setupVisible;
+  const el=document.getElementById('setupPanel');if(!el)return;
+  if(!setupVisible){el.style.display='none';return;}
+  el.style.display='';
+  el.innerHTML=`<div class="setup-panel">
+    <h2>⚙️ Google Sheets live database setup</h2>
+    <div class="setup-steps">
+      <div class="setup-step"><div class="step-num">1</div><div class="step-body">Open your <b>Truck Inbound App</b> Google Sheet → click <b>Extensions</b> → <b>Apps Script</b></div></div>
+      <div class="setup-step"><div class="step-num">2</div><div class="step-body">Delete all existing code and paste this script exactly:<div class="code-block">function doGet(e) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var callback = e.parameter.callback;
+  var sheet = ss.getSheetByName('Trucks') || ss.getActiveSheet();
+  var raw = e.parameter.data ? decodeURIComponent(e.parameter.data) : null;
+  var result = 'ok';
+
+  if (raw) {
+    var req = JSON.parse(raw);
+
+    if (req.action === 'upsert') {
+      var t = req.truck;
+      var data = sheet.getDataRange().getValues();
+      if (data.length === 0) {
+        sheet.appendRow(['uid','Truck ID','Carrier','Driver','ETA','ATA','Departed At','Date','Status','StatusKey','Note','Shipper','Destination']);
+        data = sheet.getDataRange().getValues();
+      }
+      var headers = data[0];
+      var uidCol = headers.indexOf('uid');
+      var rowIndex = -1;
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][uidCol]) === String(t.uid)) { rowIndex = i + 1; break; }
+      }
+      var row = [t.uid,t.id,t.carrier,t.driver,t.eta,t.ata,t.departedAt,t.date,t.status,t.statusKey,t.note,t.shipperName,t.destination||''];
+      if (rowIndex > 0) {
+        sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+      } else {
+        sheet.appendRow(row);
+      }
+    }
+
+    if (req.action === 'softdelete') {
+      var data = sheet.getDataRange().getValues();
+      var uidCol = data[0].indexOf('uid');
+      for (var i = 1; i < data.length; i++) {
+        if (String(data[i][uidCol]) === String(req.uid)) {
+          var rowRange = sheet.getRange(i + 1, 1, 1, data[0].length);
+          rowRange.setFontLine('line-through');
+          rowRange.setFontColor('#888888');
+          var noteCol = data[0].indexOf('Note');
+          if (noteCol >= 0) {
+            var noteCell = sheet.getRange(i + 1, noteCol + 1);
+            var existing = noteCell.getValue();
+            noteCell.setValue('[DELETED] ' + existing);
+          }
+          break;
+        }
+      }
+    }
+
+    var res = JSON.stringify({status:'ok'});
+    return ContentService.createTextOutput(callback ? callback+'('+res+')' : res)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (e.parameter.action === 'getAll') {
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      var emptyOut = JSON.stringify({trucks:[]});
+      return ContentService.createTextOutput(callback ? callback+'('+emptyOut+')' : emptyOut)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var headers = data[0];
+    var trucks = [];
+    for (var i = 1; i < data.length; i++) {
+      var row = {};
+      headers.forEach(function(h, j) { row[h] = String(data[i][j]||''); });
+      row.uid = parseInt(row.uid) || i;
+      row.statusKey = row.StatusKey || row.statusKey || '';
+      row.shipperName = row.Shipper || row.shipperName || '';
+      row.destination = row.Destination || row.destination || '';
+      trucks.push(row);
+    }
+    var out = JSON.stringify({trucks:trucks});
+    return ContentService.createTextOutput(callback ? callback+'('+out+')' : out)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var okOut = JSON.stringify({status:'ok'});
+  return ContentService.createTextOutput(callback ? callback+'('+okOut+')' : okOut)
+    .setMimeType(ContentService.MimeType.JSON);
+}</div></div></div>
+      <div class="setup-step"><div class="step-num">3</div><div class="step-body">Click <b>Save 💾</b> then click <b>Deploy</b> → <b>New deployment</b></div></div>
+      <div class="setup-step"><div class="step-num">4</div><div class="step-body">Click the <b>gear ⚙ icon</b> next to "Type" → select <b>Web app</b><br>Set <b>Execute as: Me</b> &nbsp;|&nbsp; <b>Who has access: Anyone</b> → click <b>Deploy</b> → authorize when prompted</div></div>
+      <div class="setup-step"><div class="step-num">5</div><div class="step-body">Copy the <b>Web App URL</b> and paste it below — this only needs to be done once on this device:</div></div>
+    </div>
+    <div class="fg">
+      <label>Web App URL</label>
+      <input id="sheetUrlInput" placeholder="https://script.google.com/macros/s/…/exec" value="${SHEET_URL}" style="width:100%;font-family:monospace;font-size:13px;">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn primary" onclick="saveSheetURL()">💾 Save & connect</button>
+      ${SHEET_URL?`<button class="btn ghost" onclick="loadFromSheet()">🔄 Test connection</button><button class="btn danger" onclick="clearSheetURL()">✕ Disconnect</button>`:''}
+    </div>
+    <div class="info-box" style="margin-top:12px;">
+      💡 Once connected, all users across all role links share the same live data. The Sheet updates automatically every time a truck is added or changed — no manual export needed.
+    </div>
+  </div>`;
+}
+
+function saveSheetURL(){
+  const url=document.getElementById('sheetUrlInput')?.value.trim();
+  if(!url){alert('Please paste your Web App URL first.');return;}
+  SHEET_URL=url;
+  localStorage.setItem('tit_sheeturl',url);
+  const b=document.getElementById('noSheetBanner');
+  if(b)b.innerHTML='';
+  loadFromSheet();
+  startPolling();
+  toggleSetup();toggleSetup(); // refresh panel
+}
+function clearSheetURL(){
+  SHEET_URL='';
+  localStorage.removeItem('tit_sheeturl');
+  clearInterval(pollInterval);
+  setSyncPill('off','Sheet not connected');
+  toggleSetup();toggleSetup();
+}
+
+// ── Links panel ───────────────────────────────────────────────────────────────
+let lpVisible=false;
+function toggleLinks(){
+  lpVisible=!lpVisible;
+  const el=document.getElementById('lpanel');if(!el)return;
+  if(!lpVisible){el.style.display='none';return;}
+  const base=window.location.href.split('?')[0];
+  const roles=[
+    {r:'dock',   access:'Full edit, photo upload, all statuses, export'},
+    {r:'gate',   access:'Add trucks, mark Arrived + set ATA, export'},
+    {r:'shipper',access:'Add trucks with ETA, attach BOL, update notes'},
+    {r:'dispatcher',access:'Add trucks, advance statuses, notes, export'},
+    {r:'warehouse',access:'View only + add notes'},
+  ];
+  el.style.display='';
+  el.innerHTML=`<div class="lp">
+    <h2>🔗 Role-based access links</h2>
+    <div class="info-box">All role links share the same live Google Sheet database. Any change by one user is visible to all others within 15 seconds.</div>
+    <div class="lrows">${roles.map(({r,access})=>{
+      const cfg=ROLE_CONFIG[r],url=base+'?role='+r;
+      return `<div class="lrow">
+        <span class="rlabel">${cfg.icon} ${cfg.label}</span>
+        <span class="rdesc">${access}</span>
+        <button class="btn ghost" style="margin-left:auto" onclick="copyLink('${url}',this)">📋 Copy link</button>
+        <span class="lurl">${url}</span>
+      </div>`;
+    }).join('')}</div></div>`;
+}
+function copyLink(url,btn){
+  navigator.clipboard.writeText(url).then(()=>{btn.textContent='✅ Copied!';setTimeout(()=>btn.textContent='📋 Copy link',2000);});
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+function renderMetrics(){
+  const c={pending:0,checked:0,dock:0,backlog:0};
+  trucks.filter(t=>t.statusKey!=='departed'&&t.status!=='Departed from Dock / Completed').forEach(t=>{
+    const k=t.statusKey||statusLabelToKey(t.status);
+    if(c[k]!==undefined)c[k]++;
+    if(isBacklog(t))c.backlog++;
+  });
+  document.getElementById('mb').innerHTML=`
+    <div class="metric-card"><div class="mlabel">Pending</div><div class="mvalue pending">${c.pending}</div></div>
+    <div class="metric-card"><div class="mlabel">Checked in</div><div class="mvalue checked">${c.checked}</div></div>
+    <div class="metric-card"><div class="mlabel">At dock</div><div class="mvalue dock">${c.dock}</div></div>
+    <div class="metric-card"><div class="mlabel">Backlog</div><div class="mvalue backlog">${c.backlog}</div></div>`;
+}
+
+function statusLabelToKey(label){
+  const map={'Pending arrival':'pending','Arrived / Checked in':'checked','Arrived to dock':'dock','Departed from Dock / Completed':'departed'};
+  return map[label]||'pending';
+}
+function getStatusKey(t){return t.statusKey||statusLabelToKey(t.status);}
+
+// ── Active table ──────────────────────────────────────────────────────────────
+function setFilter(f,el){
+  currentFilter=f;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');renderActive();
+}
+function renderActive(){
+  let list=trucks.filter(t=>getStatusKey(t)!=='departed');
+  if(currentFilter==='backlog')list=list.filter(t=>isBacklog(t));
+  const tb=document.getElementById('tb');
+  if(!tb)return;
+  if(!list.length){tb.innerHTML=`<tr><td colspan="10" class="empty-c">📭 No trucks to show</td></tr>`;return;}
+  tb.innerHTML=list.map(truckRow).join('');
+}
+
+function truckRow(t){
+  const sk=getStatusKey(t);
+  const st=STATUSES[sk]||STATUSES.pending;
+  const bl=isBacklog(t);
+  const arr=hasArrived(t)||['checked','dock','departed'].includes(sk);
+  let ph;
+  if(t.photo){
+    ph=`<img src="${t.photo}" class="pthu" onclick="openLB('${t.photo}','${t.id}')" alt="Photo">`;
+    if(RC.canPhoto)ph+=`<br><label style="cursor:pointer;font-size:11px;color:var(--blue-text)">Change<input type="file" accept="image/*" style="display:none" onchange="doPhoto(event,${t.uid})"></label>`;
+  }else if(RC.canPhoto){
+    ph=`<label class="pbox" title="Upload photo">📷<input type="file" accept="image/*" style="display:none" onchange="doPhoto(event,${t.uid})"></label>`;
+  }else{
+    ph=`<div class="pbox v">—</div>`;
+  }
+  const timeCell=arr
+    ?`<span class="ttag ata">ATA&nbsp;${t.ata||'—'}</span>`
+    :`<span class="ttag eta">ETA&nbsp;${t.eta||'—'}</span>`;
+  let nc=t.note?`<span class="nc" title="${t.note}">${t.note}</span>`:`<span class="muted sm">—</span>`;
+  if(t.bol)nc+=`<span class="blink" onclick="openLB('${t.bol}','BOL ${t.id}')">📄 View BOL</span>`;
+  if(RC.canBOL&&!t.bol)nc+=`<label class="blink">+ Attach BOL<input type="file" accept="image/*,application/pdf" style="display:none" onchange="doBOL(event,${t.uid})"></label>`;
+  let acts='';
+  if(RC.gateOnly&&sk==='pending')acts+=`<button class="btn primary" onclick="gateCheckIn(${t.uid})">✅ Check in + ATA</button>`;
+  if(!RC.gateOnly&&!RC.shipperOnly&&RC.canAdvance&&st.next)acts+=`<button class="btn primary" onclick="advance(${t.uid})">→ ${st.nextLabel}</button>`;
+  if(RC.canNote)acts+=`<button class="btn ghost" onclick="editNote(${t.uid})" title="Edit note">📝</button>`;
+  if(RC.shipperOnly&&sk==='pending')acts+=`<button class="btn amber" onclick="shipperEdit(${t.uid})">✏️ Edit</button>`;
+  if(RC.canRemove)acts+=`<button class="btn danger" onclick="removeTruck(${t.uid})" title="Remove">🗑</button>`;
+  return `<tr class="${bl?'blrow':''}">
+    <td>${ph}</td>
+    <td class="idc">${t.id}${t.shipperName?`<br><span class="muted sm">${t.shipperName}</span>`:''}</td>
+    <td>${t.carrier}</td><td class="muted">${t.driver}</td>
+    <td>${timeCell}</td><td class="sm">${t.destination||'—'}</td><td class="muted sm">${t.date}</td>
+    <td><span class="badge ${bl?'badge-backlog':st.badge}">${bl?'Backlog':st.label}</span></td>
+    <td>${nc}</td>
+    <td><div class="ra">${acts}</div></td>
+  </tr>`;
+}
+
+// ── Completed table ───────────────────────────────────────────────────────────
+function renderCompleted(){
+  const list=trucks.filter(t=>getStatusKey(t)==='departed');
+  const cb=document.getElementById('cb');if(!cb)return;
+  if(!list.length){cb.innerHTML=`<tr><td colspan="9" class="empty-c">No completed trucks yet</td></tr>`;return;}
+  cb.innerHTML=list.map(t=>`<tr>
+    <td class="idc">${t.id}</td><td>${t.carrier}</td><td class="muted">${t.driver}</td>
+    <td><span class="ttag eta">ETA ${t.eta||'—'}</span></td>
+    <td><span class="ttag ata">ATA ${t.ata||'—'}</span></td>
+    <td class="muted sm">${t.departedAt||'—'}</td><td class="sm">${t.destination||'—'}</td><td class="muted sm">${t.date}</td>
+    <td>${t.note?`<span class="nc" title="${t.note}">${t.note}</span>`:'—'}</td>
+  </tr>`).join('');
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function advance(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  const sk=getStatusKey(t);
+  const next=STATUSES[sk]?.next;if(!next)return;
+  if(next==='departed'){
+    openDepartedModal(uid);
+    return;
+  }
+  t.statusKey=next;t.status=STATUSES[next].label;
+  saveTruckToSheet(t);render();
+}
+
+function openDepartedModal(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  const now=new Date();
+  const defTime=pad(now.getHours())+':'+pad(now.getMinutes());
+  const defDate=todayStr();
+  document.getElementById('mc').innerHTML=`
+    <div class="mb" onclick="closeModal(event)"><div class="mo" onclick="event.stopPropagation()" style="max-width:380px">
+      <h3>🚛 Mark departed from dock</h3>
+      <div class="info-box">Please confirm the departure date and time for <b>${t.id}</b> — ${t.carrier}.</div>
+      <div class="fr">
+        <div class="fg"><label>Departure date *</label><input type="date" id="dep-date" value="${defDate}"></div>
+        <div class="fg"><label>Departure time *</label><input type="time" id="dep-time" value="${defTime}"></div>
+      </div>
+      <div class="ma">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn success" onclick="confirmDeparted(${uid})">✅ Confirm departed</button>
+      </div>
+    </div></div>`;
+}
+
+function confirmDeparted(uid){
+  const depDate=document.getElementById('dep-date')?.value;
+  const depTime=document.getElementById('dep-time')?.value;
+  if(!depDate||!depTime){alert('Both departure date and time are required.');return;}
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  t.departedAt=depDate+' '+depTime;
+  t.statusKey='departed';t.status=STATUSES.departed.label;
+  closeModal();saveTruckToSheet(t);render();
+}
+function gateCheckIn(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  const n=new Date(),def=pad(n.getHours())+':'+pad(n.getMinutes());
+  const ata=prompt('Enter ATA (actual time of arrival):',def);
+  if(ata===null)return;
+  t.ata=ata.trim();t.statusKey='checked';t.status=STATUSES.checked.label;
+  saveTruckToSheet(t);render();
+}
+function removeTruck(uid){
+  if(!confirm('Remove this truck?'))return;
+  trucks=trucks.filter(x=>String(x.uid)!==String(uid));
+  deleteTruckFromSheet(uid);render();
+}
+function editNote(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  const n=prompt('Add / edit note:',t.note||'');
+  if(n!==null){t.note=n;saveTruckToSheet(t);render();}
+}
+function doPhoto(event,uid){
+  const f=event.target.files[0];if(!f)return;
+  readFile(f,d=>{const t=trucks.find(x=>String(x.uid)===String(uid));if(t){t.photo=d;render();}});
+}
+function doBOL(event,uid){
+  const f=event.target.files[0];if(!f)return;
+  readFile(f,d=>{const t=trucks.find(x=>String(x.uid)===String(uid));if(t){t.bol=d;saveTruckToSheet(t);render();}});
+}
+function openLB(src,label){
+  document.getElementById('lb').innerHTML=`<div class="lbox" onclick="closeLB()"><button class="lbox-x" onclick="closeLB()">✕</button><img src="${src}" alt="${label}"></div>`;
+}
+function closeLB(){document.getElementById('lb').innerHTML='';}
+
+// ── Destination options ───────────────────────────────────────────────────────
+const DESTINATIONS = ['Power block','CB3 Dock','CB4 Dock','CB5 Dock','Connex','Other (Refer notes)'];
+
+// ── Add modal ─────────────────────────────────────────────────────────────────
+function openAddModal(){
+  pendingPhoto=null;pendingBOL=null;
+  const isSh=CR==='shipper',isGate=CR==='gate';
+  document.getElementById('mc').innerHTML=`
+    <div class="mb" onclick="closeModal(event)"><div class="mo" onclick="event.stopPropagation()">
+      <h3>${RC.icon} Add new truck</h3>
+      ${isSh?`<div class="info-box">Add your truck with ETA. Gate/Security will set the ATA when it physically arrives.</div>`:''}
+      ${isGate?`<div class="info-box">Add a truck as pending. Use "Check in + ATA" on the list when it arrives at the gate.</div>`:''}
+      <div class="fr">
+        <div class="fg"><label>Truck ID *</label><input id="f-id" placeholder="e.g. TRK-009"></div>
+        <div class="fg"><label>ETA</label><input id="f-eta" placeholder="e.g. 14:30"></div>
+      </div>
+      <div class="fg"><label>Carrier *</label><input id="f-carrier" placeholder="e.g. Swift Logistics"></div>
+      <div class="fg"><label>Driver name *</label><input id="f-driver" placeholder="e.g. Alex Kim"></div>
+      <div class="fr">
+        <div class="fg"><label>Date *</label><input type="date" id="f-date" value="${todayStr()}"></div>
+        <div class="fg"><label>ATA *</label><input id="f-ata" placeholder="e.g. 09:30"></div>
+      </div>
+      <div class="fg">
+        <label>Destination *</label>
+        <select id="f-destination" onchange="checkDestination()">
+          <option value="">— Select destination —</option>
+          ${DESTINATIONS.map(d=>`<option value="${d}">${d}</option>`).join('')}
+        </select>
+      </div>
+      ${isSh?`<div class="fg"><label>Your company / shipper name</label><input id="f-shipper" placeholder="e.g. ABC Corp"></div>`:''}
+      ${!isSh&&!isGate?`<div class="fg"><label>Initial status</label>
+        <select id="f-status">
+          <option value="pending" selected>Pending arrival</option>
+          <option value="checked">Arrived / Checked in</option>
+        </select></div>`:''}
+      <div class="fg" id="note-fg"><label id="note-label">Notes</label><input id="f-note" placeholder="Special instructions..."></div>
+      <div class="fg"><label>Bill of Lading *</label>
+        <div class="pdrop" id="bol-area"><input type="file" accept="image/*,application/pdf" onchange="mBOL(event)">
+        <span class="pdrop-icon">📄</span><div>Click to attach BOL (required)</div></div></div>
+      ${RC.canPhoto?`<div class="fg"><label>Photo (optional)</label>
+        <div class="pdrop" id="photo-area"><input type="file" accept="image/*" onchange="mPhoto(event)">
+        <span class="pdrop-icon">📷</span><div>Click to upload truck photo</div></div></div>`:''}
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">* Required fields</div>
+      <div class="ma">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn primary" onclick="addTruck()">Add truck</button>
+      </div>
+    </div></div>`;
+}
+
+function checkDestination(){
+  const dest=document.getElementById('f-destination')?.value;
+  const lbl=document.getElementById('note-label');
+  if(lbl){lbl.textContent=dest==='Other (Refer notes)'?'Notes * (required for Other)':'Notes';}
+}
+
+function shipperEdit(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  pendingBOL=null;
+  document.getElementById('mc').innerHTML=`
+    <div class="mb" onclick="closeModal(event)"><div class="mo" onclick="event.stopPropagation()">
+      <h3>✏️ Edit ${t.id}</h3>
+      <div class="info-box">You can update ETA and notes for pending trucks.</div>
+      <div class="fg"><label>ETA</label><input id="e-eta" value="${t.eta||''}"></div>
+      <div class="fg"><label>Notes</label><input id="e-note" value="${t.note||''}"></div>
+      <div class="fg"><label>${t.bol?'Replace BOL':'Attach BOL'}</label>
+        <div class="pdrop" id="bol-area"><input type="file" accept="image/*,application/pdf" onchange="mBOL(event)">
+        <span class="pdrop-icon">📄</span><div>${t.bol?'Click to replace BOL':'Click to attach BOL'}</div></div></div>
+      <div class="ma">
+        <button class="btn ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn primary" onclick="saveEdit(${uid})">Save</button>
+      </div>
+    </div></div>`;
+}
+function saveEdit(uid){
+  const t=trucks.find(x=>String(x.uid)===String(uid));if(!t)return;
+  t.eta=document.getElementById('e-eta').value.trim()||t.eta;
+  t.note=document.getElementById('e-note').value.trim();
+  if(pendingBOL)t.bol=pendingBOL;
+  closeModal();saveTruckToSheet(t);render();
+}
+function mPhoto(event){
+  const f=event.target.files[0];if(!f)return;
+  readFile(f,d=>{pendingPhoto=d;
+    const a=document.getElementById('photo-area');
+    if(a)a.innerHTML=`<img src="${d}" class="pprev" alt="Preview"><div style="font-size:11px;margin-top:4px;color:var(--text3)">Click to change</div><input type="file" accept="image/*" onchange="mPhoto(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">`;
+  });
+}
+function mBOL(event){
+  const f=event.target.files[0];if(!f)return;
+  readFile(f,d=>{pendingBOL=d;
+    const a=document.getElementById('bol-area');
+    if(a)a.innerHTML=`<div style="padding:10px;font-size:12px;color:var(--green-text)">✅ ${f.name} attached</div><input type="file" accept="image/*,application/pdf" onchange="mBOL(event)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">`;
+  });
+}
+function closeModal(e){
+  if(!e||e.target.classList.contains('mb')){document.getElementById('mc').innerHTML='';pendingPhoto=null;pendingBOL=null;}
+}
+function addTruck(){
+  const id=document.getElementById('f-id')?.value.trim();
+  const carrier=document.getElementById('f-carrier')?.value.trim();
+  const driver=document.getElementById('f-driver')?.value.trim();
+  const ata=document.getElementById('f-ata')?.value.trim();
+  const destination=document.getElementById('f-destination')?.value;
+  const note=document.getElementById('f-note')?.value.trim()||'';
+  const date=document.getElementById('f-date')?.value||todayStr();
+
+  // Mandatory field validation
+  const errors=[];
+  if(!id) errors.push('Truck ID');
+  if(!carrier) errors.push('Carrier');
+  if(!driver) errors.push('Driver name');
+  if(!ata) errors.push('ATA');
+  if(!destination) errors.push('Destination');
+  if(!pendingBOL) errors.push('Bill of Lading');
+  if(destination==='Other (Refer notes)'&&!note) errors.push('Notes (required when Destination is "Other (Refer notes)")');
+
+  if(errors.length){
+    alert('Please fill in the following required fields:
+
+• '+errors.join('
+• '));
+    return;
+  }
+
+  const eta=document.getElementById('f-eta')?.value.trim()||'—';
+  const shipperName=document.getElementById('f-shipper')?.value.trim()||'';
+  const statusKey=document.getElementById('f-status')?.value||'pending';
+  const truck={uid:nextUid++,id,carrier,driver,eta,ata,departedAt:'',date,destination,statusKey,status:STATUSES[statusKey].label,note,photo:pendingPhoto,bol:pendingBOL,shipperName};
+  trucks.push(truck);
+  closeModal();saveTruckToSheet(truck);render();
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportCSV(scope){
+  const list=scope==='departed'?trucks.filter(t=>getStatusKey(t)==='departed'):[...trucks];
+  if(!list.length){alert('No trucks to export.');return;}
+  const h=['Truck ID','Carrier','Driver','ETA','ATA','Departed At','Date','Destination','Status','Note','Shipper'];
+  const rows=list.map(t=>[t.id,t.carrier,t.driver,t.eta||'',t.ata||'',t.departedAt||'',t.date,t.destination||'',t.status||'',t.note||'',t.shipperName||''].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([[h.join(','),...rows].join('\n')],{type:'text/csv'}));
+  a.download=`trucks_${scope==='departed'?'completed':'all'}_${todayStr()}.csv`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+function render(){renderMetrics();renderActive();renderCompleted();}
+buildShell();
+if(SHEET_URL){loadFromSheet();startPolling();}
+else render();
+</script>
+</body>
+</html>
